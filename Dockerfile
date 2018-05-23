@@ -1,45 +1,56 @@
-# This Dockerfile will build an image that is configured
-# to run Fluentd with a Kinesis plug-in and the
-# provided configuration file.
-# TODO: Use a lighter base image, e.g. some form of busybox.
-# The image acts as an executable for the binary /usr/sbin/td-agent.
-# Note that fluentd is run with root permssion to allow access to
-# log files with root only access under /var/log/containers/*
-# Please see http://docs.fluentd.org/articles/install-by-deb for more
-# information about installing fluentd using deb package.
+# # This Dockerfile will build an image that is configured
+# # to run Fluentd with a Kinesis plug-in and the
+# # provided configuration file.
 
-FROM ubuntu:16.04
+FROM alpine:3.7
 
-# Ensure there are enough file descriptors for running Fluentd.
-RUN ulimit -n 65536
+ENV DUMB_INIT_VERSION=1.2.0
+ENV SU_EXEC_VERSION=0.2
 
-# Disable prompts from apt.
-ENV DEBIAN_FRONTEND noninteractive
+ARG DEBIAN_FRONTEND=noninteractive
 
-# Install prerequisites.
-RUN apt-get update && \
-    apt-get install -y -q curl make g++ sudo && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+# Do not split this into multiple RUN!
+# Docker creates a layer for every RUN-Statement
+# therefore an 'apk delete' has no effect
+RUN apk update \
+ && apk upgrade \
+ && apk add --no-cache \
+        ca-certificates \
+        ruby ruby-irb \
+        su-exec==${SU_EXEC_VERSION}-r0 \
+        dumb-init==${DUMB_INIT_VERSION}-r0 \
+ && apk add --no-cache --virtual .build-deps \
+        build-base sudo\
+        ruby-dev wget gnupg \
+ && update-ca-certificates \
+ && echo 'gem: --no-document' >> /etc/gemrc \
+ && gem install oj -v 3.3.10 \
+ && gem install json -v 2.1.0 \
+ && gem install fluentd -v 1.2.0 \
+ && sudo gem install \
+  fluent-plugin-kinesis fluent-plugin-kubernetes_metadata_filter net-http-persistent \
+ && sudo gem sources --clear-all \
+ && apk del .build-deps \
+ && rm -rf /var/cache/apk/* \
+ && rm -rf /tmp/* /var/tmp/* /usr/lib/ruby/gems/*/cache/*.gem
 
-# Install Fluentd.
-RUN /usr/bin/curl -L curl -L https://toolbelt.treasuredata.com/sh/install-ubuntu-xenial-td-agent3.sh | sh
+# for log storage (maybe shared with host)
+RUN mkdir -p /fluentd/log
+# configuration/plugins path (default: copied from .)
+RUN mkdir -p /fluentd/etc /fluentd/plugins
 
-# Change the default user and group to root.
-# Needed to allow access to /var/log/docker/... files.
-RUN sed -i -e "s/USER=td-agent/USER=root/" -e "s/GROUP=td-agent/GROUP=root/" /etc/init.d/td-agent
+COPY fluent.conf /fluentd/etc/
+COPY entrypoint.sh /bin/
+RUN chmod +x /bin/entrypoint.sh
 
-# Install the Kubernetes and Kinesis Fluentd.
+ENV FLUENTD_OPT=""
+ENV FLUENTD_CONF="fluent.conf"
 
-RUN td-agent-gem install fluent-plugin-kubernetes_metadata_filter net-http-persistent fluent-plugin-kinesis
+ENV LD_PRELOAD=""
+ENV DUMB_INIT_SETSID 0
 
+EXPOSE 24224 5140
 
-# Copy the Fluentd configuration file.
-COPY td-agent.conf /etc/td-agent/td-agent.conf
+ENTRYPOINT ["/bin/entrypoint.sh"]
 
-# Environment variables for configuration
-# FLUENTD_ARGS cannot be empty, so a placeholder is used. It should not have any effect because it is a default.
-ENV FLUENTD_ARGS --use-v1-config
-
-# Run the Fluentd service.
-CMD "exec" "td-agent" "$FLUENTD_ARGS"
+CMD exec fluentd -c /fluentd/etc/${FLUENTD_CONF} -p /fluentd/plugins $FLUENTD_OPT          
