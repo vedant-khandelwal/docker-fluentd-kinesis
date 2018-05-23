@@ -31,7 +31,7 @@ RUN sed -i -e "s/USER=td-agent/USER=root/" -e "s/GROUP=td-agent/GROUP=root/" /et
 
 # Install the Kubernetes and Kinesis Fluentd.
 
-RUN td-agent-gem install fluent-plugin-kinesis
+RUN td-agent-gem install fluent-plugin-kubernetes_metadata_filter net-http-persistent fluent-plugin-kinesis
 
 
 # Copy the Fluentd configuration file.
