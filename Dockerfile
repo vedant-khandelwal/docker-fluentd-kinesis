@@ -2,7 +2,7 @@
 # # to run Fluentd with a Kinesis plug-in and the
 # # provided configuration file.
 
-FROM alpine:3.9
+FROM alpine:3.7
 
 ENV DUMB_INIT_VERSION=1.2.0
 ENV SU_EXEC_VERSION=0.2
