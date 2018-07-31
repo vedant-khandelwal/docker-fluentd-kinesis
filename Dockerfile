@@ -29,6 +29,7 @@ RUN apk update \
  && gem install fluentd -v 1.2.0 \
  && sudo gem install \
   fluent-plugin-kinesis fluent-plugin-kubernetes_metadata_filter net-http-persistent \
+ && sudo gem install fluent-plugin-systemd -v 1.0.1 \
  && sudo gem sources --clear-all \
  && apk del .build-deps \
  && rm -rf /var/cache/apk/* \
