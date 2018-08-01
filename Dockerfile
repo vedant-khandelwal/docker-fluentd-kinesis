@@ -2,49 +2,50 @@
 # # to run Fluentd with a Kinesis plug-in and the
 # # provided configuration file.
 
-FROM alpine:3.7
+FROM debian:stretch-slim
 
-ENV DUMB_INIT_VERSION=1.2.0
-ENV SU_EXEC_VERSION=0.2
+ENV FLUENTD_VERSION=1.2.0
+ENV JEMALLOC_VERSION=4.4.0
+ENV OJ_VERSION=3.3.10
+ENV JSON_VERSION=2.1.0
+ENV FLUENTD_SYSTEMD_PLUGIN=1.0.1
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-# Do not split this into multiple RUN!
-# Docker creates a layer for every RUN-Statement
-# therefore an 'apk delete' has no effect
-RUN apk update \
- && apk upgrade \
- && apk add --no-cache \
-        ca-certificates \
-        ruby ruby-irb \
-        su-exec==${SU_EXEC_VERSION}-r0 \
-        dumb-init==${DUMB_INIT_VERSION}-r0 \
- && apk add --no-cache --virtual .build-deps \
-        build-base sudo\
-        ruby-dev wget gnupg \
- && update-ca-certificates \
- && echo 'gem: --no-document' >> /etc/gemrc \
- && gem install oj -v 3.3.10 \
- && gem install json -v 2.1.0 \
- && gem install fluentd -v 1.2.0 \
- && sudo gem install \
-  fluent-plugin-kinesis fluent-plugin-kubernetes_metadata_filter net-http-persistent \
- && sudo gem sources --clear-all \
- && apk del .build-deps \
- && rm -rf /var/cache/apk/* \
- && rm -rf /tmp/* /var/tmp/* /usr/lib/ruby/gems/*/cache/*.gem
+RUN apt-get update \
+  && apt-get upgrade -y \
+  && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    ruby \
+  && buildDeps=" \
+    make gcc g++ libc-dev \
+    ruby-dev \
+    wget bzip2 gnupg dirmngr \
+    " \
+  && apt-get install -y --no-install-recommends $buildDeps \
+  && update-ca-certificates \
+  && echo 'gem: --no-document' >> /etc/gemrc \
+  && gem install oj -v $OJ_VERSION \
+  && gem install json -v $JSON_VERSION \
+  && gem install fluentd -v $FLUENTD_VERSION \
+  && gem install fluent-plugin-kinesis fluent-plugin-kubernetes_metadata_filter net-http-persistent \
+  && gem install fluent-plugin-systemd -v $FLUENTD_SYSTEMD_PLUGIN \
+  && wget -O /tmp/jemalloc-${JEMALLOC_VERSION}.tar.bz2 https://github.com/jemalloc/jemalloc/releases/download/${JEMALLOC_VERSION}/jemalloc-${JEMALLOC_VERSION}.tar.bz2 \
+  && cd /tmp && tar -xjf jemalloc-${JEMALLOC_VERSION}.tar.bz2 && cd jemalloc-${JEMALLOC_VERSION}/ \
+  && ./configure && make \
+  && mv lib/libjemalloc.so.2 /usr/lib \
+  && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false $buildDeps \
+  && rm -rf /var/lib/apt/lists/* \
+  && rm -rf /tmp/* /var/tmp/* /usr/lib/ruby/gems/*/cache/*.gem
 
-# for log storage (maybe shared with host)
-RUN mkdir -p /fluentd/log
-# configuration/plugins path (default: copied from .)
-RUN mkdir -p /fluentd/etc /fluentd/plugins
+RUN mkdir -p /fluentd/log /fluentd/etc /fluentd/plugins
 
 COPY fluent.conf /fluentd/etc/
 
 ENV FLUENTD_OPT=""
 ENV FLUENTD_CONF="fluent.conf"
 
-ENV LD_PRELOAD=""
+ENV LD_PRELOAD="/usr/lib/libjemalloc.so.2"
 ENV DUMB_INIT_SETSID 0
 
 EXPOSE 24224 5140
