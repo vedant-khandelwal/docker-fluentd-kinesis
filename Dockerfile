@@ -44,6 +44,7 @@ COPY fluent.conf /fluentd/etc/
 
 ENV FLUENTD_OPT=""
 ENV FLUENTD_CONF="fluent.conf"
+ENV FLUENTD_KUBERNETES_URL="https://kubernetes.default:443"
 
 ENV LD_PRELOAD="/usr/lib/libjemalloc.so.2"
 ENV DUMB_INIT_SETSID 0
