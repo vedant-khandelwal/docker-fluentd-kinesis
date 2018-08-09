@@ -49,6 +49,10 @@ ENV FLUENTD_KUBERNETES_URL="https://kubernetes.default:443"
 ENV LD_PRELOAD="/usr/lib/libjemalloc.so.2"
 ENV DUMB_INIT_SETSID 0
 
+# set logging agent info
+ENV LOGGING_AGENT_HOST="falkonry-logging-agent"
+ENV LOGGING_AGENT_PORT="8080"
+
 EXPOSE 24224 5140
 
 CMD exec fluentd -c /fluentd/etc/${FLUENTD_CONF} -p /fluentd/plugins $FLUENTD_OPT          
